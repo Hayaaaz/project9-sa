@@ -1,0 +1,65 @@
+# A minimal three-pillars stack for the Week 9 reps and project.
+# Metrics (Prometheus + Grafana) + logs/traces (OpenSearch + Dashboards).
+# This is a teaching stack, NOT a production deployment: no auth hardening,
+# single node, ephemeral volumes. Do not expose these ports publicly.
+#
+#   docker compose -f docker-compose.observability.yml up -d
+#   Grafana            http://localhost:3001   (admin / admin on first run)
+#   Prometheus         http://localhost:9090
+#   OpenSearch         http://localhost:9200
+#   OpenSearch Dash.   http://localhost:5601
+#
+# Port note: Grafana publishes on 3001, NOT 3000 — Open WebUI from Appendix B
+# already owns http://localhost:3000, and two services cannot bind the same
+# host port. If you are not running Open WebUI you may move Grafana back to 3000.
+#
+# host.docker.internal: services that must scrape or reach a process running on
+# the host/VM (your inference server, dcgm-exporter — see prometheus.yml) get
+# `extra_hosts: ["host.docker.internal:host-gateway"]` so that name resolves to
+# the host from inside the container (it is automatic on Docker Desktop, but the
+# explicit mapping makes it work on Linux/VMs too).
+#
+services:
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach inference/gpu targets on the host
+
+  grafana:
+    image: grafana/grafana:12.0.1
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin   # placeholder; change for any real use
+    ports:
+      - "3001:3000"   # host 3001 -> container 3000; avoids Open WebUI's 3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # in case a datasource lives on the host
+    depends_on:
+      - prometheus
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.0
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_SECURITY_PLUGIN=true        # teaching only — never in production
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+    ports:
+      - "9200:9200"
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.0
+    environment:
+      - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - "5601:5601"
+    depends_on:
+      - opensearch
