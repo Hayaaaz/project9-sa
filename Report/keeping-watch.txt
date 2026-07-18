@@ -1,0 +1,34 @@
+Q1 — Why did checkout fail at 14:05?
+
+Did the AI match the query?
+Yes. The filter correctly targeted ERROR-level events in the checkout service using the appropriate timestamp prefix.
+
+Did the AI match the answer?
+Yes. The returned log lines showed checkout aborted due to payment_declined, which aligns with the human-verified cause.
+
+Would a fix be shipped based only on the AI’s answer?
+Yes — but only after human verification. The AI’s output was accurate once the timestamp prefix was corrected.
+
+
+Q2 — Which users were affected?
+
+Did the AI match the query?
+Yes. The filter correctly selected checkout ERROR events at 14:05 on 2026-06-12.
+
+Did the AI match the answer?
+Yes. The AI returned the three affected users: u-4419, u-4420, and u-4422.
+
+Would a fix be shipped based only on the AI’s answer?
+Yes — after human verification. The AI’s output matched the actual log data.
+
+
+Q3 — What was the root cause vs the symptom?
+
+Did the AI match the query?
+No. The AI hallucinated a checkout-service name, used an incorrect timestamp prefix, and added a contains filter that did not match any logs.
+
+Did the AI match the answer?
+No. The AI returned no log lines because the filter was incorrect.
+
+Would a fix be shipped based only on the AI’s answer?
+No. Human verification shows the root cause was upstream payment authorization timeouts (Stripe 504 errors), while the symptom was checkout aborts for multiple users.
