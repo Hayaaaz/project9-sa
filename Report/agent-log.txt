@@ -1,0 +1,48 @@
+Q1 — Why did checkout fail at 14:05?
+
+Question:
+Why did checkout fail at 14:05 on 2026-06-12?
+
+AI-generated filter:
+{'level': 'ERROR', 'service': 'checkout', 'ts_prefix': '2026-06-12T14', 'contains': 'abort'}
+
+AI-returned log lines:
+{"ts":"2026-06-12T14:05:02.901Z","level":"ERROR","service":"checkout","trace_id":"d4e1","msg":"checkout aborted","cart_id":"c-9930","user":"u-4419","reason":"payment_declined"}
+{"ts":"2026-06-12T14:05:03.210Z","level":"ERROR","service":"checkout","trace_id":"e2a8","msg":"checkout aborted","cart_id":"c-9931","user":"u-4420","reason":"payment_declined"}
+{"ts":"2026-06-12T14:05:09.260Z","level":"ERROR","service":"checkout","trace_id":"aa01","msg":"checkout aborted","cart_id":"c-9933","user":"u-4422","reason":"payment_declined"}
+
+Human-verified answer:
+Checkout failed due to upstream payment service timeouts (Stripe 504). The checkout service aborted each transaction with payment_declined.
+
+
+Q2 — Which users were affected?
+
+Question:
+Show checkout errors at 14:05 on 2026-06-12 and list the users.
+
+AI-generated filter:
+{'level': 'ERROR', 'service': 'checkout', 'ts_prefix': '2026-06-12T14:05'}
+
+AI-returned log lines:
+{"ts":"2026-06-12T14:05:02.901Z","level":"ERROR","service":"checkout","trace_id":"d4e1","msg":"checkout aborted","cart_id":"c-9930","user":"u-4419","reason":"payment_declined"}
+{"ts":"2026-06-12T14:05:03.210Z","level":"ERROR","service":"checkout","trace_id":"e2a8","msg":"checkout aborted","cart_id":"c-9931","user":"u-4420","reason":"payment_declined"}
+{"ts":"2026-06-12T14:05:09.260Z","level":"ERROR","service":"checkout","trace_id":"aa01","msg":"checkout aborted","cart_id":"c-9933","user":"u-4422","reason":"payment_declined"}
+
+Human-verified answer:
+Affected users: u-4419, u-4420, and u-4422. All failures were caused by upstream payment authorization timeouts.
+
+
+Q3 — What was the root cause vs the symptom?
+
+Question:
+What was the root cause vs the symptom for the checkout failures at 14:05 on 2026-06-12?
+
+AI-generated filter:
+{'level': 'ERROR', 'service': 'checkout-service', 'ts_prefix': '2026-06-12T14:00:00', 'contains': 'checkout failure'}
+
+AI-returned log lines:
+(no log lines returned — filter was incorrect)
+
+Human-verified answer:
+Symptom: Checkout aborted for multiple users (payment_declined).
+Root Cause: Upstream payment authorization timeouts (Stripe 504). The checkout service aborted because the payment processor failed to authorize the transactions.
