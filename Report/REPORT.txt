@@ -1,0 +1,129 @@
+Project 9 — Monitoring, Observability, and Ask Your Logs
+--------------------------------------------------------
+
+Overview
+This report documents the observability pipeline built for Project 9, including
+Prometheus, Grafana, OpenSearch, and OpenSearch Dashboards. It also includes
+manual incident analysis, AI-assisted log queries, and a comparison of human
+and AI results.
+
+--------------------------------------------------------
+1. System Setup and Verification
+--------------------------------------------------------
+
+The observability stack was brought up using:
+code/docker-compose.observability.yml
+
+Components verified:
+- Prometheus running and scraping metrics
+- Grafana accessible and connected to Prometheus
+- OpenSearch running with sample logs loaded
+- OpenSearch Dashboards accessible and able to query logs
+
+Screenshots were captured showing all four UIs healthy:
+- Prometheus targets page
+- Grafana dashboard
+- OpenSearch Dashboards Discover view
+- Environment overview
+
+--------------------------------------------------------
+2. Grafana Dashboard
+--------------------------------------------------------
+
+Two panels were created:
+
+A. p95 Latency Panel
+PromQL:
+histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+
+B. Error Ratio Panel
+PromQL:
+sum(rate(http_requests_total{status=~"5.."}[5m]))
+/
+sum(rate(http_requests_total[5m]))
+
+
+These panels show elevated latency and error spikes around 14:05 on 2026-06-12,
+correlating with the checkout failures.
+
+--------------------------------------------------------
+3. Manual Incident Investigation
+--------------------------------------------------------
+
+Three questions were answered manually using OpenSearch logs.
+
+Q1 — Why did checkout fail at 14:05?
+Multiple checkout events aborted with reason payment_declined.
+Upstream logs showed Stripe 504 gateway timeout errors.
+Root cause: payment authorization timeouts.
+Symptom: checkout aborted.
+
+Q2 — Which users were affected?
+Affected users:
+- u-4419
+- u-4420
+- u-4422
+
+Q3 — What was the root cause vs the symptom?
+Symptom: checkout aborted for multiple users.
+Root cause: upstream payment authorization timeouts (Stripe 504).
+
+All findings were correlated using ts and trace_id.
+
+--------------------------------------------------------
+4. AI-Assisted Log Queries (ask_logs.py)
+--------------------------------------------------------
+
+The same three questions were asked using ask_logs.py.
+For each question, the AI-generated filter and returned log lines were captured
+in agent-log.txt.
+
+Summary of AI behavior:
+- Q1: Correct filter and correct answer.
+- Q2: Correct filter and correct answer.
+- Q3: Incorrect filter (hallucinated service name and timestamp), no log lines returned.
+
+--------------------------------------------------------
+5. Verdict (keeping-watch.txt Summary)
+--------------------------------------------------------
+
+Q1 — Did the AI match the query?
+Yes. Correct timestamp prefix and service.
+
+Did the AI match the answer?
+Yes. Returned checkout aborted with payment_declined.
+
+Would a fix be shipped based only on the AI’s answer?
+Yes — after human verification.
+
+Q2 — Did the AI match the query?
+Yes. Correctly filtered checkout errors at 14:05.
+
+Did the AI match the answer?
+Yes. Returned the correct affected users.
+
+Would a fix be shipped based only on the AI’s answer?
+Yes — after human verification.
+
+Q3 — Did the AI match the query?
+No. Incorrect filter (wrong service, wrong timestamp, irrelevant contains field).
+
+Did the AI match the answer?
+No. Returned no log lines.
+
+Would a fix be shipped based only on the AI’s answer?
+No. Human verification shows the real root cause was upstream payment timeouts.
+
+--------------------------------------------------------
+6. Final Notes
+--------------------------------------------------------
+
+The observability pipeline successfully:
+- ingested logs,
+- visualized latency and error metrics,
+- correlated events across services,
+- and demonstrated the importance of human verification when using AI tools.
+
+Manual analysis and AI-assisted analysis aligned for Q1 and Q2, but diverged
+significantly for Q3, showing that AI filters can fail when the query is
+ambiguous or when the model hallucinates service names or timestamps.
