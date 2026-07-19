@@ -1,129 +1,82 @@
-Project 9 — Monitoring, Observability, and Ask Your Logs
---------------------------------------------------------
+# REPORT.txt
+# Project 9 — Ask Your Logs
+# Incident Analysis Report
 
-Overview
-This report documents the observability pipeline built for Project 9, including
-Prometheus, Grafana, OpenSearch, and OpenSearch Dashboards. It also includes
-manual incident analysis, AI-assisted log queries, and a comparison of human
-and AI results.
+------------------------------------------------------------
+1. Observability Stack Status
+------------------------------------------------------------
+I brought up the observability stack using docker-compose.observability.yml.
+All four UIs were healthy:
+- OpenSearch
+- OpenSearch Dashboards
+- Prometheus
+- Grafana
 
---------------------------------------------------------
-1. System Setup and Verification
---------------------------------------------------------
+I loaded sample-logs.jsonl into OpenSearch and verified that the logs were
+indexed correctly.
 
-The observability stack was brought up using:
-code/docker-compose.observability.yml
-
-Components verified:
-- Prometheus running and scraping metrics
-- Grafana accessible and connected to Prometheus
-- OpenSearch running with sample logs loaded
-- OpenSearch Dashboards accessible and able to query logs
-
-Screenshots were captured showing all four UIs healthy:
-- Prometheus targets page
-- Grafana dashboard
-- OpenSearch Dashboards Discover view
-- Environment overview
-
---------------------------------------------------------
+------------------------------------------------------------
 2. Grafana Dashboard
---------------------------------------------------------
+------------------------------------------------------------
+I built a Grafana dashboard with two panels:
 
-Two panels were created:
-
-A. p95 Latency Panel
+(1) p95 latency panel  
 PromQL:
-histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+  histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
 
-B. Error Ratio Panel
+(2) error ratio panel  
 PromQL:
-sum(rate(http_requests_total{status=~"5.."}[5m]))
-/
-sum(rate(http_requests_total[5m]))
+  sum(rate(http_requests_total{status=~"5.."}[5m])) 
+    / sum(rate(http_requests_total[5m]))
 
+Both panels showed elevated latency and increased 5xx errors around 14:05,
+matching the incident window in the logs.
 
-These panels show elevated latency and error spikes around 14:05 on 2026-06-12,
-correlating with the checkout failures.
-
---------------------------------------------------------
-3. Manual Incident Investigation
---------------------------------------------------------
-
-Three questions were answered manually using OpenSearch logs.
+------------------------------------------------------------
+3. Manual Incident Analysis (Human Queries)
+------------------------------------------------------------
 
 Q1 — Why did checkout fail at 14:05?
-Multiple checkout events aborted with reason payment_declined.
-Upstream logs showed Stripe 504 gateway timeout errors.
-Root cause: payment authorization timeouts.
-Symptom: checkout aborted.
+I inspected the logs around 14:05 and correlated payments and checkout entries
+using trace_id. Payments showed repeated upstream timeouts (HTTP 504) when
+contacting Stripe. Checkout aborted immediately afterward for the same trace_id.
+Root cause: Stripe authorization timeouts.
+Symptom: Checkout aborted.
 
 Q2 — Which users were affected?
-Affected users:
-- u-4419
-- u-4420
-- u-4422
+I reviewed checkout ERROR logs during the incident window. The affected users were:
+- u‑4419
+- u‑4420
+- u‑4422
 
-Q3 — What was the root cause vs the symptom?
-Symptom: checkout aborted for multiple users.
-Root cause: upstream payment authorization timeouts (Stripe 504).
+Q3 — What was the root cause vs. the symptom?
+Root cause: Payments service experienced upstream timeouts (latency > 5000 ms).
+Symptom: Checkout aborted for multiple users.
 
-All findings were correlated using ts and trace_id.
+------------------------------------------------------------
+4. AI-Generated Queries (ask_logs.py)
+------------------------------------------------------------
+I ran ask_logs.py on the same three questions.
 
---------------------------------------------------------
-4. AI-Assisted Log Queries (ask_logs.py)
---------------------------------------------------------
+Q1 AI filter:
+{'level': 'ERROR', 'service': 'checkout', 'ts_prefix': '2023-02-16T14', 'contains': 'fail'}
+AI output: (no matching logs)
 
-The same three questions were asked using ask_logs.py.
-For each question, the AI-generated filter and returned log lines were captured
-in agent-log.txt.
+Q2 AI filter:
+{'level': 'ERROR', 'service': 'auth', 'contains': 'affected user'}
+AI output: (no matching logs)
 
-Summary of AI behavior:
-- Q1: Correct filter and correct answer.
-- Q2: Correct filter and correct answer.
-- Q3: Incorrect filter (hallucinated service name and timestamp), no log lines returned.
+Q3 AI filter:
+{'level': 'ERROR', 'service': 'my_service', 'ts_prefix': '2022-01-01T12:00:00', 'contains': 'root cause'}
+AI output: (no matching logs)
 
---------------------------------------------------------
-5. Verdict (keeping-watch.txt Summary)
---------------------------------------------------------
+------------------------------------------------------------
+5. Verdict (Summary)
+------------------------------------------------------------
+Across all three questions, the AI-generated filters did not match my manual
+queries. The AI chose incorrect timestamps, incorrect services, and keywords
+that do not appear in the logs. Because of these mismatches, the AI returned
+no relevant log lines.
 
-Q1 — Did the AI match the query?
-Yes. Correct timestamp prefix and service.
-
-Did the AI match the answer?
-Yes. Returned checkout aborted with payment_declined.
-
-Would a fix be shipped based only on the AI’s answer?
-Yes — after human verification.
-
-Q2 — Did the AI match the query?
-Yes. Correctly filtered checkout errors at 14:05.
-
-Did the AI match the answer?
-Yes. Returned the correct affected users.
-
-Would a fix be shipped based only on the AI’s answer?
-Yes — after human verification.
-
-Q3 — Did the AI match the query?
-No. Incorrect filter (wrong service, wrong timestamp, irrelevant contains field).
-
-Did the AI match the answer?
-No. Returned no log lines.
-
-Would a fix be shipped based only on the AI’s answer?
-No. Human verification shows the real root cause was upstream payment timeouts.
-
---------------------------------------------------------
-6. Final Notes
---------------------------------------------------------
-
-The observability pipeline successfully:
-- ingested logs,
-- visualized latency and error metrics,
-- correlated events across services,
-- and demonstrated the importance of human verification when using AI tools.
-
-Manual analysis and AI-assisted analysis aligned for Q1 and Q2, but diverged
-significantly for Q3, showing that AI filters can fail when the query is
-ambiguous or when the model hallucinates service names or timestamps.
+Human review is required. I would not ship a fix based solely on the AI’s
+answers.
