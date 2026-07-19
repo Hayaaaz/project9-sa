@@ -1,34 +1,85 @@
+# keeping-watch.txt
+# Project 9 — Ask Your Logs
+# Incident Analysis: Human vs. AI Queries
+
+------------------------------------------------------------
 Q1 — Why did checkout fail at 14:05?
+------------------------------------------------------------
 
-Did the AI match the query?
-Yes. The filter correctly targeted ERROR-level events in the checkout service using the appropriate timestamp prefix.
+My manual query:
+I inspected all ERROR logs around 14:05 and correlated payments and checkout
+entries using trace_id. Payments showed repeated upstream timeouts (504 errors)
+when contacting Stripe. Checkout aborted immediately afterward for the same
+trace_id values. The failure was caused by payment authorization timeouts.
 
-Did the AI match the answer?
-Yes. The returned log lines showed checkout aborted due to payment_declined, which aligns with the human-verified cause.
+AI‑generated filter:
+{'level': 'ERROR', 'service': 'checkout', 'ts_prefix': '2023-02-16T14', 'contains': 'fail'}
 
-Would a fix be shipped based only on the AI’s answer?
-Yes — but only after human verification. The AI’s output was accurate once the timestamp prefix was corrected.
+Comparison:
+The AI correctly identified ERROR logs and the checkout service, but chose the
+wrong year (2023 instead of 2026). Because of this timestamp mismatch, the AI
+filter would miss the actual incident logs.
+
+Verdict:
+Partially correct but incomplete. I would not ship a fix based only on the AI’s
+answer because the incorrect timestamp hides the real failure.
 
 
+------------------------------------------------------------
 Q2 — Which users were affected?
+------------------------------------------------------------
 
-Did the AI match the query?
-Yes. The filter correctly selected checkout ERROR events at 14:05 on 2026-06-12.
+My manual query:
+I reviewed all checkout ERROR logs during the incident window. The affected
+users were:
+- u‑4419
+- u‑4420
+- u‑4422
 
-Did the AI match the answer?
-Yes. The AI returned the three affected users: u-4419, u-4420, and u-4422.
+AI‑generated filter:
+{'level': 'ERROR', 'service': 'auth', 'contains': 'affected user'}
 
-Would a fix be shipped based only on the AI’s answer?
-Yes — after human verification. The AI’s output matched the actual log data.
+Comparison:
+The AI filter is incorrect. It selected the wrong service (“auth”), invented a
+keyword (“affected user”), and did not extract any user IDs. This filter would
+return zero relevant logs.
+
+Verdict:
+Incorrect. I would not ship a fix based on the AI’s answer because it fails to
+identify any of the actual affected users.
 
 
-Q3 — What was the root cause vs the symptom?
+------------------------------------------------------------
+Q3 — What was the root cause vs. the symptom?
+------------------------------------------------------------
 
-Did the AI match the query?
-No. The AI hallucinated a checkout-service name, used an incorrect timestamp prefix, and added a contains filter that did not match any logs.
+My manual query:
+I correlated ERROR logs by trace_id. Payments experienced upstream timeouts
+(latency > 5000 ms, HTTP 504) when contacting Stripe. Checkout aborted as a
+result. The root cause was the payments dependency failure; the symptom was
+checkout errors for multiple users.
 
-Did the AI match the answer?
-No. The AI returned no log lines because the filter was incorrect.
+AI‑generated filter:
+{'level': 'ERROR', 'service': 'my_service', 'ts_prefix': '2022-01-01T12:00:00', 'contains': 'root cause'}
 
-Would a fix be shipped based only on the AI’s answer?
-No. Human verification shows the root cause was upstream payment authorization timeouts (Stripe 504 errors), while the symptom was checkout aborts for multiple users.
+Comparison:
+The AI filter is completely wrong. It chose a non-existent service, the wrong
+year, and a keyword not present in the logs. It did not correlate trace_id or
+distinguish root cause vs. symptom.
+
+Verdict:
+Completely incorrect. I would not ship a fix based on the AI’s answer because it
+fails to identify either the root cause or the symptom.
+
+
+------------------------------------------------------------
+Overall Verdict
+------------------------------------------------------------
+
+Across all three questions, the AI produced filters that were:
+- partially correct (Q1)
+- incorrect (Q2)
+- completely wrong (Q3)
+
+The AI’s queries did not reliably match my manual analysis. Human review is
+required before taking action on any AI-generated incident findings.
