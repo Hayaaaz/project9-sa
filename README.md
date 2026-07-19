@@ -10,5 +10,3 @@ Included:
 - Comparison of human vs AI results in `keeping-watch.txt`
 - All required screenshots in the `screenshots/` folder
 - Full project summary in `REPORT.txt`
-
-The repository contains all required files for the Normal Tier submission.
